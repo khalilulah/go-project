@@ -1,18 +1,109 @@
 package main
 
-import "fmt"
+// air to start
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/gofiber/fiber/v2"
+)
 
 func main(){
-	fmt.Println("hello world")
-	fmt.Println(intDivision(10,2))
+	fmt.Println("hello world ")
+	app := fiber.New()
+
+
+	type Todo struct{
+		ID int `json:"id"`
+		Completed bool `json:"completed"`
+		Body string `json:"body"`
+	}
+
+todos := []Todo{}
+
+
+	//handler function
+
+	//get todo
+	app.Get("/api/todos", func (c *fiber.Ctx) error  {
+		return c.Status(200).JSON(todos)
+	})
+
+	//create todo
+	app.Post("/api/todos", func (c *fiber.Ctx)error  {
+		// "todo" is a pointer that points to the memory address of "Todo"
+		// the "&" means memory address of whatever comes after it 
+		todo := &Todo{}
+
+		if err := c.BodyParser(todo); err != nil{
+			return err
+		}
+		if todo.Body == ""{
+			return c.Status(400).JSON(fiber.Map{"error": "Todo name is required"})
+		}
+        
+
+		
+		todo.ID = len(todos) + 1
+
+		// if you log "todo" it is going to give you the memory address of the "Todo" array
+		// but if you log "*todo"(notice the sign before it) it is going to give you the value/items in the "Todo" array
+		todos = append(todos, *todo)
+
+		return c.Status(201).JSON(todo)
+	})
+
+	//update todo 
+	app.Patch("/api/todos/:id", func(c *fiber.Ctx) error{
+		id:= c.Params("id")
+
+		for i, todo := range todos{
+			if fmt.Sprint(todo.ID) == id{
+				todos[i].Completed =true
+				return c.Status(200).JSON(todos[i])
+			}
+		}
+return c.Status(404).JSON(fiber.Map{"error":"todo not found"})
+	})
+
+
+	//delete todo
+	app.Delete("/api/todos/:id", func(c *fiber.Ctx)error  {
+	id := c.Params("id")
+	
+	for i, todo := range todos{
+		if fmt.Sprint(todo.ID) == id{
+			 todos =append(todos[:i], todos[i+1:]... )
+			 return c.Status(200).JSON(todos)
+		}
+	}
+return c.Status(404).JSON(fiber.Map{"error":"todo not found"})
+	})
+
+	log.Fatal(app.Listen(":4000"))
 }
 
-// func printme(printValue string){
-// 	fmt.Println(printValue)
-// }
 
-func intDivision(numerator int, denominator int)(int, int){
-	var result int = numerator/denominator
-	var remainder int = numerator%denominator
-	return result, remainder
-}
+
+//index, value := range nums
+
+// On each iteration:
+
+// The first variable (index) gets the position of the element.
+
+// The second variable (value) gets a copy of the element’s value.
+
+// Example:
+
+// nums := []int{10, 20, 30}
+
+
+// Iteration breakdown:
+
+// First loop → index = 0, value = 10
+
+// Second loop → index = 1, value = 20
+
+// Third loop → index = 2, value = 30
+
