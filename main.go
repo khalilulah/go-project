@@ -1,109 +1,97 @@
 package main
 
-// air to start
-
 import (
+	"context"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func main(){
-	fmt.Println("hello world ")
-	app := fiber.New()
-
-
-	type Todo struct{
-		ID int `json:"id"`
+type Todo struct{
+		ID int `json:"_id" bson:_id`
 		Completed bool `json:"completed"`
 		Body string `json:"body"`
 	}
 
-todos := []Todo{}
 
+	var collection *mongo.Collection
+func main() {
+	fmt.Println("hello wold")
 
-	//handler function
+	err := godotenv.Load(".env")
 
-	//get todo
-	app.Get("/api/todos", func (c *fiber.Ctx) error  {
-		return c.Status(200).JSON(todos)
-	})
-
-	//create todo
-	app.Post("/api/todos", func (c *fiber.Ctx)error  {
-		// "todo" is a pointer that points to the memory address of "Todo"
-		// the "&" means memory address of whatever comes after it 
-		todo := &Todo{}
-
-		if err := c.BodyParser(todo); err != nil{
-			return err
-		}
-		if todo.Body == ""{
-			return c.Status(400).JSON(fiber.Map{"error": "Todo name is required"})
-		}
-        
-
-		
-		todo.ID = len(todos) + 1
-
-		// if you log "todo" it is going to give you the memory address of the "Todo" array
-		// but if you log "*todo"(notice the sign before it) it is going to give you the value/items in the "Todo" array
-		todos = append(todos, *todo)
-
-		return c.Status(201).JSON(todo)
-	})
-
-	//update todo 
-	app.Patch("/api/todos/:id", func(c *fiber.Ctx) error{
-		id:= c.Params("id")
-
-		for i, todo := range todos{
-			if fmt.Sprint(todo.ID) == id{
-				todos[i].Completed =true
-				return c.Status(200).JSON(todos[i])
-			}
-		}
-return c.Status(404).JSON(fiber.Map{"error":"todo not found"})
-	})
-
-
-	//delete todo
-	app.Delete("/api/todos/:id", func(c *fiber.Ctx)error  {
-	id := c.Params("id")
-	
-	for i, todo := range todos{
-		if fmt.Sprint(todo.ID) == id{
-			 todos =append(todos[:i], todos[i+1:]... )
-			 return c.Status(200).JSON(todos)
-		}
+	if err != nil{
+		log.Fatal("Error loading .env file:", err)
 	}
-return c.Status(404).JSON(fiber.Map{"error":"todo not found"})
-	})
 
-	log.Fatal(app.Listen(":4000"))
+	MONGODB_URI := os.Getenv("MONGODB_URI")
+
+	clientOptions := options.Client().ApplyURI(MONGODB_URI)
+
+	client,err := mongo.Connect(context.Background(), clientOptions)
+
+	if err != nil{
+		log.Fatal(err)
+	}
+
+	defer client.Disconnect(context.Background())
+
+	err = client.Ping(context.Background(),nil)
+
+	if err != nil{
+		log.Fatal(err)
+	}
+	fmt.Println("connected to mongodb atlas")
+
+	collection = client.Database("go-project").Collection("todos")
+
+	app := fiber.New()
+
+	app.Get("/api/todos", getTodos)
+	// app.Post("/api/todos", createTodo)
+	// app.Patch("/api/todos/:id", updateTodo)
+	// app.Delete("/api/todos/:id", deleteTodo)
+
+	port := os.Getenv("PORT")
+
+	if port == ""{
+		port = "5000"
+	}
+
+	log.Fatal(app.Listen("0.0.0.0:" + port))
+
 }
 
 
 
-//index, value := range nums
+func getTodos(c *fiber.Ctx) error{
+	var todos []Todo
 
-// On each iteration:
+	cursor, err := collection.Find(context.Background(),bson.M{})
 
-// The first variable (index) gets the position of the element.
-
-// The second variable (value) gets a copy of the element’s value.
-
-// Example:
-
-// nums := []int{10, 20, 30}
+	if err != nil{
+		return err
+	}
 
 
-// Iteration breakdown:
+	defer cursor.Close(context.Background())
 
-// First loop → index = 0, value = 10
+	for cursor.Next(context.Background()){
+		var todo Todo
 
-// Second loop → index = 1, value = 20
-
-// Third loop → index = 2, value = 30
-
+		if err := cursor.Decode(&todo);err != nil {
+			return  err
+		}
+		todos = append(todos, todo)
+	}
+	return c.JSON(todos)
+}
+// func createTodo(c *fiber.Ctx) error{}
+// func updateTodo(c *fiber.Ctx) error{}
+// func deleteTodo(c *fiber.Ctx) error{}
